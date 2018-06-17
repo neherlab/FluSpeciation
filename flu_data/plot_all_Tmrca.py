@@ -12,7 +12,7 @@ mTmrca = {}
 Tmrca = {}
 for l,ln in lineages:
 	try:
-		tmrca_traj = np.loadtxt('flu_data/TMRCA/%s__tmrca_trajectory.dat'%l)
+		tmrca_traj = np.loadtxt('%s_tmrca_trajectory.dat'%l)
 		tmrca_traj = tmrca_traj[tmrca_traj[:,0]>cutoff]
 		if tmrca_traj.shape[0]%2==1:
 			tmrca_traj = tmrca_traj[1:]

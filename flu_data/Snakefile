@@ -1,0 +1,170 @@
+GISAID_data_path = "/home/richard/Projects/nextstrain/fauna/data"
+
+# def raw_data(w):
+# 	alns = {'H1N1':GISAID_data_path + '/h1n1_ha_2.fasta',
+# 			'H3N2':GISAID_data_path + '/h3n2_ha.fasta',
+# 			'Ball':"Ball/2018-06-03_B_combined.fasta", #GISAID_data_path + '/all_B_ha.fasta',
+# 			'H1N1pdm':GISAID_data_path + '/h1n1pdm_ha.fasta'}
+# 	return alns[w.subtype]
+
+
+def min_date(w):
+	mdates = {"H1N1":1975, "H3N2":1968, "Ball":1900, "H1N1pdm":2009}
+	return mdates[w.subtype]
+
+def raw_data(w):
+	alns = {'H1N1':'H1N1/2018-06-03_H1N1.fasta',
+			'H3N2':'H3N2/2018-05-08_H3N2.fasta',
+			'Ball':'Ball/2018-06-03_B_combined.fasta',
+			'H1N1pdm':'H1N1pdm/2018-05-08_H1N1pdm.fasta'}
+	return alns[w.subtype]
+
+def titer_data(w):
+	titers = {'H1N1':GISAID_data_path + '/h1n1_crick_hi_titers.tsv',
+			'H3N2':GISAID_data_path + '/h3n2_crick_hi_titers.tsv',
+			'yam':GISAID_data_path + '/yam_crick_hi_titers.tsv',
+			'vic':GISAID_data_path + '/vic_crick_hi_titers.tsv',
+			'Ball':GISAID_data_path + '/Ball_crick_hi_titers.tsv',
+			'H1N1pdm':GISAID_data_path + '/h1n1pdm_crick_hi_titers.tsv'}
+	return titers[w.subtype]
+
+def priority_files(w):
+	priorty = {'H1N1':GISAID_data_path + '/h1n1_crick_hi_strains.tsv',
+			'H3N2':GISAID_data_path + '/h3n2_crick_hi_strains.tsv',
+			'yam':GISAID_data_path + '/yam_crick_hi_strains.tsv',
+			'vic':GISAID_data_path + '/vic_crick_hi_strains.tsv',
+			'Ball':GISAID_data_path + '/Ball_crick_hi_strains.tsv',
+			'H1N1pdm':GISAID_data_path + '/h1n1pdm_crick_hi_strains.tsv'}
+
+	return priorty[w.subtype]
+
+def vpy(w):
+	vpy = {'H1N1':50,
+			'H3N2':50,
+			'Ball':50,
+			'H1N1pdm':100}
+	return vpy[w.subtype]
+
+rule all:
+	input:
+		"auspice/{subtype}_tree.json"
+
+rule parse:
+	input:
+		raw_data
+	output:
+		seq = "{subtype}/results/raw_aln.fasta",
+		meta = "{subtype}/results/meta.tsv"
+	params:
+		fields = "strain subtype date country host type",
+		date_order = "monthfirst"
+	shell:
+		'augur parse --sequences {input} --output {output.seq} --metadata {output.meta} --fields {params.fields} --fix_dates {params.date_order}'
+
+
+# rule parse:
+# 	input:
+# 		raw_data
+# 	output:
+# 		seq = "{subtype}/results/raw_aln.fasta",
+# 		meta = "{subtype}/results/meta.tsv"
+# 	params:
+# 		fields = "strain virus accession date region country division city passage lab age gender",
+# 	shell:
+# 		'augur parse --sequences {input} --output {output.seq} --metadata {output.meta} --fields {params.fields} '
+
+rule filter:
+	input:
+		seq = rules.parse.output.seq,
+		meta = rules.parse.output.meta,
+		exclude = "{subtype}/metadata/dropped_strains.txt",
+		# priority = priority_files
+	output:
+		"{subtype}/results/filtered.fasta"
+	params:
+		vpc = vpy,
+		cat = "year",
+		min_length = 900,
+		min_date = min_date
+	shell:
+		'augur filter --sequences {input.seq} --output {output} --metadata {input.meta}'
+		  		' --viruses_per_cat {params.vpc} --exclude {input.exclude} --min_date {params.min_date}'
+		  		' --cat {params.cat} --min_length {params.min_length}' # --priority {input.priority}
+
+
+rule align:
+	input:
+		seq = rules.filter.output,
+		ref = "{subtype}/metadata/ha_reference.gb"
+	output:
+		"{subtype}/results/aligned.fasta"
+	shell:
+		'augur align --sequences {input.seq} --output {output} --reference_sequence {input.ref}'
+
+rule tree:
+	input:
+		aln = rules.align.output,
+	output:
+		tree = "{subtype}/results/tree_raw.nwk",
+	params:
+		method = 'iqtree'
+	shell:
+		'augur tree --alignment {input.aln} --output {output.tree} --method {params.method}'
+
+rule timetree:
+	input:
+		aln = rules.align.output,
+		metadata = rules.parse.output.meta,
+		tree = rules.tree.output.tree,
+	output:
+		tree = "{subtype}/results/tree.nwk",
+		node_data = "{subtype}/results/node_data.json"
+	params:
+		root = 'best',
+		n_iqd = 4
+	shell:
+		'augur treetime --alignment {input.aln} --tree {input.tree} --metadata {input.metadata}'
+		' --output {output.tree} --node_data {output.node_data}'
+		' --timetree --n_iqd {params.n_iqd} --root {params.root}'
+
+rule translate:
+	input:
+		tree = rules.timetree.output.tree,
+		ref = rules.align.input.ref,
+		node_data = rules.timetree.output.node_data
+	output:
+		"{subtype}/results/aa_muts.json"
+	shell:
+		'augur translate --tree {input.tree} --node_data {input.node_data}'
+		 		' --output {output} --reference_sequence {input.ref}'
+
+rule titers:
+	input:
+		tree = rules.timetree.output.tree,
+		node_data = rules.timetree.output.node_data,
+		titers = titer_data
+	output:
+		tree_model = "{subtype}/results/HI_tree_model.json",
+		#subs_model = "{subtype}/results/HI_subs_model.json"
+	shell:
+		'augur titers --tree {input.tree} --node_data {input.node_data} '
+			'--titers {input.titers} '
+			'--output_tree_model {output.tree_model}'
+
+rule export:
+	input:
+		tree = rules.timetree.output.tree,
+		node_data = rules.timetree.output.node_data,
+		metadata = rules.parse.output.meta,
+		aa_muts = rules.translate.output,
+		tree_model = rules.titers.output.tree_model,
+		config = "{subtype}/metadata/config.json",
+		geo_info = "../../../../nextstrain/augur/source-data/geo_lat_long.tsv"
+	output:
+		tree_json = "auspice/{subtype}_tree.json",
+		meta_json = "auspice/{subtype}_meta.json",
+	shell:
+		'augur export --tree {input.tree} --metadata {input.metadata}'
+		' --node_data {input.node_data} {input.aa_muts} {input.tree_model}'
+		' --tree_output {output.tree_json} --meta_output {output.meta_json}'
+		' --geo_info {input.geo_info} --auspice_config {input.config}'

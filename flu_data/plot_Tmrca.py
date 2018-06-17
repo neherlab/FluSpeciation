@@ -12,8 +12,8 @@ parser.add_argument("--output", help="output prefix")
 args = parser.parse_args()
 
 T = Phylo.read(args.tree, 'newick')
-of = [args.titers] if args.titers else []
-node_data = read_node_data(args.node_data, other_files = of)
+of = [args.node_data, args.titers] if args.titers else [args.node_data]
+node_data = read_node_data(of)
 
 T.root.up = None
 for n in T.find_clades(order='postorder'):
@@ -82,7 +82,8 @@ n=T.root
 n_root = n
 loss_date = sorted([c.youngest for c in n])[-2]
 #loss_cTiter = sorted([c for c in n], key=lambda x:x.youngest)[-2].max_cTiter
-loss_cTiter = sorted([c.max_cTiter for c in n])[-2]
+if args.titers:
+	loss_cTiter = sorted([c.max_cTiter for c in n])[-2]
 while not n.is_terminal():
 	if n.up is None:
 		tmrca_traj.append((n.numdate, 0))
