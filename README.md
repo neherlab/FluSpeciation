@@ -9,6 +9,8 @@ In this range the steady TW is unstable and the antigenic advance of the lead st
 
 ### Contents
  * the directory `flu_data` contains alignments and `Snakefile` to run `augur`. The output was visualized in `auspice` to generate Figure 1. The script `plot_all_Tmrca.py` generates the saw-tooth graphs in Fig.~1.
+ * `flu_data/split_trees.py`: script that splits a global influenza B tree into the sublineages Victoria and Yamagata
+ * `flu_data/plot_tmrca.py`: script that uses the output of the `augur` pipeline to produce the tabular files `{lineage}_tmrca_trajectory.dat`. The latter are tab separated files with year in the first and Tmrca in the second columns.
  * the MATLAB file `mfdist.m` implements the stochastic fitness class simulation of a large population in a one dimensional landscape. It the was used to produce simulation data on extinction times.
  * the file `pop2tw.m` is an analogous fitness class simulation of two coupled populations to investigate the speciation behavior.
  * the file `FluEpiTreeNM.m` implements a tree structured viral population use to simulate the SIR model.
