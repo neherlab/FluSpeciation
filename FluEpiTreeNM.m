@@ -1,4 +1,4 @@
-function FluEpiTreeNM(replica,mui,mi,di,ni)
+%function FluEpiTreeNM(replica,mui,mi,di,ni)
 % the code simulates the SIR type epidemics with antigentic mutation for the flu
 % the function takes in five variables
 % replica labels different rounds of simulations with the same parameter
@@ -6,52 +6,51 @@ function FluEpiTreeNM(replica,mui,mi,di,ni)
 % mi gives which of the mutation rates is using
 % di gives which of the deleterious effect is using
 % ni gives which of the host population sizes is using
-%replica=1;mui=1;mi=12;di=4;ni=5;
-%% parameters to be determined by input
-mu01 = 0.;  % no mortal
-d01  = 0.02;  % inverse of range of cross-immunity, antigentic advance in one mutation 
-m01  = d01*0.01*(1:24); % mutation rates 
-%[0.002:0.002:0.01,(1:7)*0.02]; %(4:15); %(10:2:32); %[0.02:0.01:0.08,0.1:0.02:0.18]; %(1:0.5:6.5); %[(0.002:.002:0.01),(0.015:0.005:0.045)]; %[(0.06:0.02:0.18),0.2:0.05:0.4];  %0.001*mu01;
-b01  = [1,0.5,0.2,0.1,0.01];  % deleterious effect in transmissibility
-n01  = 10.^(-8:-3)*d01^2;   % inverse of host population sizes
-mu0  = mu01(mui);  % mortality
-m0   = m01(mi);  % mutation rate
-d0   = d01;  % inverse of cross-immunity range
-b0   = d0*b01(di);  % deleterious change
-n0   = n01(ni);  % inverse of host population
+replica=1;mui=1;mi=24;di=7;ni=4;
+% no mortal
+mu01 = 0.; 
+d01  = 0.02;
+m01  = d01*0.01*(1:24); %[0.002:0.002:0.01,(1:7)*0.02]; %(4:15); %(10:2:32); %[0.02:0.01:0.08,0.1:0.02:0.18]; %(1:0.5:6.5); %[(0.002:.002:0.01),(0.015:0.005:0.045)]; %[(0.06:0.02:0.18),0.2:0.05:0.4];  %0.001*mu01;
+b01  = [1,0.5,0.3,0.2,0.1,0.01,0];
+mu0  = mu01(mui);  %(mui)
+m0   = m01(mi);  %(mi)
+d0   = d01;  %(di)
+b0   = d0*b01(di);
+n01  = 10.^(-8:-3)*d01^2;
+n0   = n01(ni);
 %replica = 0;
-%% simulation parameters
-h = min(0.5,0.01*round(0.1/d0)); % forward time inteval
-T = 50000*round(0.1/d0); % total simulation period
-totStep = floor(T/h)+1;  % total number of forward steps
-lT = round(T/100);       % maximal number of strains to quit the simulation
+%% parameters
+h = min(0.5,0.01*round(0.1/d0)); %0.02;
+T = 200*round(0.1/d0); %max(5000,10000*round(n0/(d0^2*m0)))
+totStep = floor(T/h)+1;
+lT = round(T/100);
 nm = min(30,max(1,round(m0*d0./n0/200)));
 
-nmax = 10;  % maximal number of decendent strains of a given strain (to reduce computation cost)
-N = nm*400; % maximal number of alive genotype
-Nrec = 50000; % number of steps to be recorded
-hT   = floor(totStep/Nrec);  % step inteval for recording the data
+nmax = 10;
+N = nm*400; % maximum number of alive genotype
+Nrec = 5000;
+hT   = floor(totStep/Nrec);
 
-sig  = 1;    % range of cross-immunity
-beta0= 10;   % transmissibility 
-db   = beta0*b0;  % deleterious effect in transmissibility
+sig  = 1;   % range of cross-immunity
+beta0= 10;   % transimission rate
+db   = beta0*b0;
 nu   = 5;   % recover rate from infection
-mort = mu0; % mort rate could be strain dependent
-mu   = m0;  % mutation rate per individual
+mort = mu0;  % mort rate could be strain dependent
+mu   = m0; % mutation rate per individual
 I0   = n0;  % minimal fraction of infectious (inverse of effective population, epidemics starts from this value)
 
-s = rng('shuffle');  % random seeding
-%% initialize the problem
+s = rng('shuffle');
+%% initiate the problem
 %nid   = zeros(1,N*N); % index on the alive
 prts  = [];  % parents of genotype
 %taus  = zeros(1,N);  % as a common ancestor
 birth = [];  % birth time of genotype
-death = [];  %zeros(lT*N,1);  % death time of genotype
+death = []; %zeros(lT*N,1);  % death time of genotype
 noff  = [];  % no of alive offspring lineages
 droot = [];  % distance to root
 Imax  = [];  % maximum I of strain
 talp  = [];  % time to the latest offsprings
-beta  = [];  % transmissibility
+beta  = [];
 
 xx    = [];  % fitness at birth
 dx    = [];  % antigenic gain from mutation
@@ -63,24 +62,27 @@ Ipop = zeros(1,N); % population of infected
 nn   = zeros(1,N); % number of offsprings
 gid  = zeros(1,N); % id of genotype
 
+%ancs = cell(N);
+
 % initialize the strain
-gn   = 1;     % label the first seeding strain
+gn   = 1;   % label the number of appeared genotype
 iniI = d0^2;  % initial fraction of infectious
-iniq = log(beta0/nu)-d0;   % initial immunity (close to the steady state to avoid fast extinction)
-beta(gn) = beta0;  % initial transmissibility
-prts(gn) = 0;   % no parents
-birth(gn) = 0;  % born at t=0
-death(gn) = 0;  % not yet dead
-droot(gn) = 0;  % is the root
-xx(gn)    = beta(gn)/nu*exp(-iniq);  % fitness at birth
+iniq = log(beta0/nu)-d0;   % initial immune
+beta(gn) = beta0;
+prts(gn) = 0;
+birth(gn) = 0;
+death(gn) = 0;
+droot(gn) = 0;  % depth to root
+xx(gn)    = 1;   % fitness at birth
 dx(gn)    = 0;  % fitness gain at birth
 phi(gn)   = (mort/nu*(log(beta(gn)/nu)));  % drift at birth
-Imax(gn)  = iniI;  % maximal infection for strains
-noff(gn) = 1;   % no of alive offspring branches
-%id = noff>1;   % index of the strain with more than one branch
+Imax(gn)  = iniI;
+noff(gn) = 1;  % no of alive offspring branches
+%id = noff>1;    % index of the strain with more than one branch
 for i = 1:gn
-    Ipop(i) = iniI;  
+    Ipop(i) = iniI;
     Spop(i) = 1;  % initial Spop will be updated later.
+    %nid(i)  = i;
     gid(i)  = i;
 end
 alive = find(Ipop>0);  % alive strains
@@ -107,6 +109,7 @@ mr = zeros(1,Nrec);   % mean cross-immunity distance
 vr = zeros(1,Nrec);   % variance
 ts = zeros(1,Nrec);   % total time distance to the common root
 tp = zeros(1,Nrec);   % time increment to the last common root
+vn = zeros(1,Nrec);   % velocity of nose
 
 mlca = zeros(1,Nrec);   % time to the last common root
 dlca = zeros(1,Nrec);   % generation to the last common root
@@ -120,26 +123,27 @@ naa   = []; % number of alive strains
 net   = 0;
 nwt   = 0;
 
-% record the initial status
+% record the initial 
 
-Sp = 1 - sum(Ipop);  % total number of susceptibles
+Sp = 1 - sum(Ipop);  % total number of susceptible individuals
 for j = alive
     Kij((1:gn),(1:gn)) = 1;
     Spop(j) = Sp*exp(-sum(iniq*Kij((1:gn),(1:gn))));
 end
-nalv = 1;   % number of alive strains
+%ancs{1} = 1;
+nalv = 1;
 
 %flag  = 0;
 ext   = 0;  % extinction time
 extmp = 0;  % last extinction time
-tautp0= 0;  % if extinct, corrected by the time to the reseeding strain
-taus = 0;   % time to the MRCA
-taup = 0;   % generations to MRCA
+tautp0= 0;
+taus = 0;
+taup = 0;
+dtmp = 0;
 %% evolve the system
 tic;
 for t = 2:totStep
-    % if the number of coexisting strains or total number of emerged
-    % strains larger than the recording threshold
+    
     if length(alive)>=N || gn>=lT*N
         break;
     end
@@ -147,11 +151,11 @@ for t = 2:totStep
     Itemp = Ipop;
     Stmp0 = Spop;
     Stemp = Spop;
-    tautp = taus;  % time to the MRCA
+    tautp = taus;  % time to the last common ancestor
     taupp = taup;
     %idtmp = id;
-    
-    % Midpoint method for forward SIR simulation
+    % Midpoint
+    %
     Itemp(alive) = Ipop(alive)+h/2*(beta(gid(alive)).*Spop(alive)-nu-mort).*Ipop(alive);
     dItmp = - sum(Itemp(alive)-Ipop(alive));
     Stemp(alive) = Spop(alive)+dItmp/Sp*Spop(alive)-h/2*(nu*Ipop(alive)*Kij(alive,alive)-mort*log(Spop(alive))).*Spop(alive);
@@ -163,12 +167,12 @@ for t = 2:totStep
     Sp = 1 - sum(Ipop);
     
     % extinction
-    % remove the strains from alive set
     id = find(Ipop(alive)<n0);
     Ipop(alive(id)) = 0;    
     nn(alive(id)) = 0;
     flg  = death(gid(alive))==0 & Ipop(alive)<n0;
     death(gid(alive(flg)))= (t-1)*h;
+    %if ~isempty(id)
     for ii = id
         i = gid(alive(ii));
         noff(i) = noff(i)-1;
@@ -186,6 +190,7 @@ for t = 2:totStep
         end
     end
     alive(id) = [];
+    %end
     
     if isempty(alive)  % no strain left all extinct
         % not record the first extinction
@@ -196,7 +201,7 @@ for t = 2:totStep
             net   = net+1;
             et(net)= ext-extmp;
         end
-        % reseeding with a previous strain
+        % reservior
         [~,i] = max(Spop);
         Ipop(i) = 10*I0;
         %totI(t) = 10*I0;
@@ -207,7 +212,7 @@ for t = 2:totStep
         tautp0 = (t-1)*h-birth(gid(i));
     end
     
-    % update the time to the MRCA
+    % tau
     id = find(noff>1);
     if ~isempty(id)
         taus = max((t-1)*h-birth(id)-tautp0);
@@ -217,32 +222,36 @@ for t = 2:totStep
         taup = max(droot(gid(alive)))-min(droot(gid(alive)));
     end
     
-    % if time to MRCA jumps
+    
     if taus < tautp  % successive branching point
         if abs(taus)>0.9*h %any(id)
             taus = taus+tautp0;
             tautp0 = 0;
         end
         nwt = nwt+1;
-        wt(nwt) = tautp-taus;  % jump in tMRCA, time between successive MRCA
-        et_br(nwt) = tautp;  % depth in time of the dead branch
-        ngbr(nwt)  = taupp;  % depth in generations of the dead branch
-        naa(nwt)   = nalv;   % number of surviving strains
+        wt(nwt) = tautp-taus;
+        et_br(nwt) = tautp;
+        ngbr(nwt)  = taupp;
+        naa(nwt)   = nalv; 
+        %tautp0 = 0;
     end
     
     % add time interval to all strains with alive offsprings
     % mutation (stochastic)
+    xn = max(beta(gid(alive))/nu.*Spop(alive))-1;
+    vx = var(beta(gid(alive))/nu.*Spop(alive));
     for j=alive
-        if rand(1)<mu*Ipop(j)/I0*h  && nn(j)<nmax  % if mutation happens by chance
+        if rand(1)<mu*Ipop(j)/I0*h  && nn(j)<nmax
             dd    = d0; % distance to its root (can be draw from some distribution)
             if rand(1)<(1-exp(1-beta0/beta(j)))
-                beta1 = beta0;  % compensatory mutation to transmissibility
+                beta1 = beta0;
             else
-                beta1 = beta(j)-db; %deleterious effect on transmissibility of an antigenic mutation *log(rand(1));
+                beta1 = beta(j)-db; %+db*log(rand(1));
             end
-            SnewP = Sp*(Spop(j)/Sp)^(exp(-dd/sig)); % number of susceptibles to the new strain
-            if beta1*SnewP>nu  % the new strain will survive
-                % adding new strain and its potential genotype
+            SnewP = Sp*(Spop(j)/Sp)^(exp(-dd/sig));
+            x1 = beta1/nu.*SnewP-1;
+            if x1>0 && rand(1)<min(1,exp((x1^2-xn^2)/vx/2)) %establish beta1*SnewP>nu  % will survive
+                % adding new genotype and its potential genotype
                 if length(alive)>=N || gn>=lT*N
                     break;
                 end
@@ -262,23 +271,24 @@ for t = 2:totStep
                 xx(gn)    = beta1*(SnewP)/nu;   % fitness at birth
                 dx(gn)    = beta1*(SnewP-Spop(j))/nu;  % fitness gain at birth
                 phi(gn)   = (beta1/nu*(Stmp0(j)-Spop(j))/h/nu+mort/nu*(log(beta1/nu)-beta1/nu*Stmp0(j)+1));  % drift at birth
-                Imax(gn)  = I0;
+                Imax(gn)  = I0/x1;  % start from 1/x I0
                 noff(gid(j)) = noff(gid(j))+1;  % add an offspring
                 noff(gn)  = 1; % newly born strain
                 %ancs{gn} = [ancs{j},gn];
                 
-                % update epidemic equations for the new strain
+                % update epidemics
                 j1 = nal(1);
                 Kij(j1,alive)= Kij(j,alive)*exp(-dd/sig);
                 Kij(alive,j1)= Kij(alive,j)*exp(-dd/sig); % update the distance in all genotype
-                Ipop(j1) = I0;
+                Ipop(j1) = I0/x1;  % start from 1/x I0
                 Spop(j1) = SnewP;  % initial Spop will be updated later.
                 alive = union(alive,j1);  % alive strains% immunity types
                 gid(j1) = gn;
             end
-            Ipop(j) = Ipop(j)-I0; % failed mutation
+            Ipop(j) = Ipop(j)-I0;
+            %totI(t) = totI(t)-I0; % failed mutation
         end
-        if Ipop(j)>Imax(gid(j)) % record the maximal infection for a strain.
+        if Ipop(j)>Imax(gid(j))
             Imax(gid(j)) = Ipop(j);
         end
     end
@@ -286,8 +296,7 @@ for t = 2:totStep
     nalv = length(alive); 
     
 %
-    % extinguish the branches other than the most populated one to root if
-    % survives longer than the cross-immunity range.
+    % extinguish the branches other than the most populated one to root
     if taup>sig/d0 || length(alive)>=N
         id = find(noff>1);
         if length(id)>1
@@ -364,7 +373,7 @@ for t = 2:totStep
     end
 %
     
-    % record data
+    % record
     if mod(t-1,hT)==0
         tt = (t-1)/hT;
         % infections
@@ -395,6 +404,47 @@ for t = 2:totStep
         % common ancestor
         ts(tt)   = taus;
         tp(tt)   = taup;
+        vn(tt)   = (max(droot)-dtmp)/h/hT;
+        dtmp  = max(droot);
+        % distance generation to the last common ancestor
+        %{
+        if ~isempty(alive)
+            if isempty(id0) || ~isempty(setdiff(id0,alive))
+                aset = ancs{alive(1)};
+                for ii = alive
+                    aset = intersect(aset,ancs{ii});
+                end
+            else
+                for ii = setdiff(alive,id0)
+                    aset = intersect(aset,ancs{ii});
+                end
+            end
+            if isempty(mast) || mast~=max(aset)
+                mast = max(aset);
+                ml0  = length(ancs{alive(1)})-find(ancs{alive(1)}==mast);
+                mlca(tt) = ml0;
+                for ii = alive
+                    ml0  = length(ancs{ii})-find(ancs{ii}==mast);
+                    if ml0>mlca(tt)
+                        mlca(tt) = ml0;
+                    end
+                end
+            else
+                mlca(tt) = mlca(tt);
+                for ii = setdiff(alive,id0)
+                    ml0  = length(ancs{ii})-find(ancs{ii}==mast);
+                    if ml0>mlca(tt)
+                        mlca(tt) = ml0;
+                    end
+                end
+            end
+            id0 = alive;
+            dlca(tt) = (t-1)*h-birth(mast);
+        else
+            dlca(tt) = dlca(tt-1);
+            mlca(tt) = mlca(tt-1);
+        end
+        %}
     end
 
 end
@@ -405,16 +455,16 @@ toc
 
 %% save data
 %dirc  = './';
-wname = 'Epidemics';  % to record epidemic data
-tname = 'WaitTime';   % to record branching data
-ename = 'Extinct';    % to record extinction data
-gname = 'Genotype';   % to record strain data
-uname = sprintf('%.3f',100*mu0);    % mortality rate
-mname = sprintf('%.3f',m0*10000);   % mutation rate
-dname = sprintf('%.3f',d0);         % antigenic advance
-nname = sprintf('%.2f',-log10(n0)); % population size
-sname = sprintf('%.2f',(d0/b0));    % deleterious effect in transmissibility
-rname = sprintf('%03d',replica);    % replica of the same set of parameters
+wname = 'Epidemics';
+tname = 'WaitTime';
+ename = 'Extinct';
+gname = 'Genotype';
+uname = sprintf('%.3f',100*mu0);
+mname = sprintf('%.3f',m0*10000);
+dname = sprintf('%.3f',d0);
+nname = sprintf('%.2f',-log10(n0));
+rname = sprintf('%03d',replica);
+sname = sprintf('%.2f',(d0/b0));
 dtype = '.dat';
 epiname = [wname,'_',uname,'_',mname,'_',dname,'_',sname,'_',nname,'_',rname,dtype];
 wtname  = [tname,'_',uname,'_',mname,'_',dname,'_',sname,'_',nname,'_',rname,dtype];
